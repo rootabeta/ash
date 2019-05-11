@@ -56,13 +56,15 @@ while True:
         log.failure("Generic error.")
         sys.exit(1)
 prompt="ash>"
+ssh.invoke_shell()
 log.success("Connection established!")
 while True:
     try:
         cmd=raw_input(prompt)
         ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command(cmd)
         line=mystdout.readline()
-        if not line: pass
+        if not line: 
+            pass
         print str(line)
     except KeyboardInterrupt:
         log.failure("User requested interrupt. Shutting down cleanly...")
