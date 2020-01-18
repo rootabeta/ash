@@ -1,15 +1,11 @@
 try:
     import time as t
     import paramiko
-    from subprocess import *
+    import subprocess
     import sys
-    from pwn import *
+    import getpass
 except:
-    print("Missing vital packages. Installing...")
-    import os
-    os.system("pip install paramiko")
-    os.system("pip install pwntools")
-    sys.exit(0)
+    exit(0)
 print(" _____ _____ _____ ")
 print("|  _  |   __|  |  |")
 print("|     |__   |     |")
@@ -18,57 +14,87 @@ print("       [ASH]       ")
 print("  An SSH over tor  ")
 print("-------------------")
 print("\nWARNING: This program requires tor to be running in the background on port 9050.")
-host=raw_input("Host: ")
-p = subprocess.Popen("tor-resolve "+str(host), stdout=subprocess.PIPE, shell=True)
-ip=p.communicate()
-ip=str(ip)
-ip=ip.replace("('","")
-ip=ip.replace("\n","")
-ip=ip.replace("'","")
-ip=ip.replace(", None","")
-ip=ip.replace("\n)","")
-ip=ip[:-3]
-ip=str(ip)
-port=raw_input("Port: ")
-if port=="":
-    port=22
-user=raw_input("Username: ")
-pswd=raw_input("Password: ")
+
+try:
+    host = sys.argv[1]
+except:
+    exit("Error - expected argument")
+
+try:
+    port = sys.argv[2]
+except:
+    port = 22
+
+try:
+    user,host = host.split("@",1)
+except:
+    user = input("username: ")
+
+password = getpass.getpass("password: ")
+
+def debug(string,debug=True,verbose=True):
+    string = "[DEBUG] {}".format(string)
+    if debug:
+        if verbose:
+            print(string)
+        else:
+            return(string)
+try:
+    p = subprocess.Popen("tor-resolve {}".format(str(host)), stdout=subprocess.PIPE, shell=True)
+    ip=p.communicate()
+    ip = ip[0].decode('utf-8').strip("\n")
+    print(ip)
+    ip=str(ip)
+except:
+    print("Resolution error - may resolve over regular DNS! Abort in the next 5 seconds if this is important to you...")
+    for i in range(0,5):
+        sys.stdout.write("{}... ".format(5-i)) ; sys.stdout.flush()
+        t.sleep(1)
+
+    print("\nHave it your way")
+
+    ip = str(host)
+
+port = 22
+
 ssh=paramiko.SSHClient()
 ssh.load_system_host_keys()
-paramiko.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-log.info("Host: "+str(ip))
-log.info("Port: "+str(port))
-log.info("Username: "+user)
-log.info("Password: "+pswd)
+ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
 while True:
     try:
-        log.info("Attempting to connect.")
-        ssh.connect(ip,int(port),username=str(user),password=str(pswd),timeout=None,look_for_keys=False,pkey=None,key_filename=None)
+        debug("Attempting to connect.")
+        ssh.connect(ip,int(port),username=str(user),password=str(password),timeout=None,look_for_keys=False,pkey=None,key_filename=None)
         break
     except KeyboardInterrupt:
-        log.failure("User requested interrupt.")
+        debug("User requested interrupt.")
         sys.exit(0)
     except paramiko.ssh_exception.AuthenticationException:
-        log.failure("Authentication Error.")
+        debug("Authentication Error.")
         sys.exit(0)
-    except:
-        log.failure("Generic error.")
+    except Exception as e:
+        debug("Generic error.")
+        debug(e)
         sys.exit(1)
 prompt="ash>"
 ssh.invoke_shell()
-log.success("Connection established!")
+debug("Connection established!")
+print("Note: this is a rudimentary shell at best - you will not be able to change dir or anything fancy. press Ctrl-C to exit.")
 while True:
     try:
-        cmd=raw_input(prompt)
+        cmd=input(prompt)
         ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command(cmd)
-        line=mystdout.readline()
-        if not line: 
-            pass
-        print str(line)
+        line = None
+        while True:
+            line=ssh_stdout.readline()
+            sys.stdout.write(line)
+            if not line: 
+                sys.stdout.flush()
+                break
+
     except KeyboardInterrupt:
-        log.failure("User requested interrupt. Shutting down cleanly...")
+        print("User requested interrupt. Shutting down cleanly...")
         ssh.close()
         sys.exit(0)
-    except:
-        log.failure("Generic error. Something's wrong, but we'll power through it...")
+    except Exception as f:
+        print(f)
