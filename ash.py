@@ -1,11 +1,14 @@
 try:
+    import socks #pip3 install PySocks
+    import telnetlib
+    import os
     import time as t
     import paramiko
     import subprocess
     import sys
     import getpass
 except:
-    exit(0)
+    exit("Dependancy error")
 
 if sys.version_info[0] != 3:
     exit("Requires python3")
@@ -43,11 +46,12 @@ def debug(string,debug=True,verbose=True):
             print(string)
         else:
             return(string)
+
 try:
     p = subprocess.Popen("tor-resolve {}".format(str(host)), stdout=subprocess.PIPE, shell=True)
     ip=p.communicate()
     ip = ip[0].decode('utf-8').strip("\n")
-    print(ip)
+    debug("Resolved to {}".format(ip))
     ip=str(ip)
 except:
     print("Resolution error - may resolve over regular DNS! Abort in the next 5 seconds if this is important to you...")
@@ -61,44 +65,63 @@ except:
 
 port = 22
 
-ssh=paramiko.SSHClient()
-ssh.load_system_host_keys()
-ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+#ssh=paramiko.SSHClient()
+##ssh.load_system_host_keys()
+#ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
 while True:
     try:
         debug("Attempting to connect.")
-        ssh.connect(ip,int(port),username=str(user),password=str(password),timeout=None,look_for_keys=False,pkey=None,key_filename=None)
+        #proxy = paramiko.ProxyCommand('tor --SocksPort 4172')
+        proxy = socks.socksocket()
+        proxy.set_proxy(
+                proxy_type=socks.SOCKS4,
+                addr='localhost',
+                port=9050
+        )
+        debug("Connecting...")
+        proxy.connect((str(ip),int(port)))    
+        #debug("Connected to proxy")
+        #transport = paramiko.Transport(proxy)
+        #transport.connect() 
+        #debug("Transport online")
+        #ssh = paramiko.client.SSHClient.connect(ip,int(port),username=str(user),password=str(password),timeout=None,look_for_keys=False,allow_agent=False,pkey=None,key_filename=None,sock=proxy)
+        
+        #####-----#####
+
+        ssh=paramiko.SSHClient()
+        #ssh.load_system_host_keys()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        ssh.connect(ip,int(port),username=str(user),password=str(password),timeout=None,look_for_keys=False,allow_agent=False,pkey=None,key_filename=None,sock=proxy)
+        print(ssh._transport.get_banner())
         break
     except KeyboardInterrupt:
-        debug("User requested interrupt.")
+        print("User requested interrupt.")
         sys.exit(0)
     except paramiko.ssh_exception.AuthenticationException:
-        debug("Authentication Error.")
+        print("Authentication Error.")
         sys.exit(0)
     except Exception as e:
-        debug("Generic error.")
+        print("Generic error.")
         debug(e)
-        sys.exit(1)
+        sys.exit(-1)
 prompt="ash>"
-ssh.invoke_shell()
-debug("Connection established!")
-print("Note: this is a rudimentary shell at best - you will not be able to change dir or anything fancy. press Ctrl-C to exit.")
-while True:
-    try:
-        cmd=input(prompt)
-        ssh_stdin, ssh_stdout, ssh_stderr = ssh.exec_command(cmd)
-        line = None
-        while True:
-            line=ssh_stdout.readline()
-            sys.stdout.write(line)
-            if not line: 
-                sys.stdout.flush()
-                break
+#ssh.get_pty()
 
-    except KeyboardInterrupt:
-        print("User requested interrupt. Shutting down cleanly...")
-        ssh.close()
-        sys.exit(0)
-    except Exception as f:
-        print(f)
+term = subprocess.check_output('echo $TERM',shell=True).split()
+rows, columns = os.popen('stty size', 'r').read().split()
+term = term[0]
+debug(term)
+chan = ssh.invoke_shell(term=term,width=int(rows),height=int(columns))
+
+
+telnet = telnetlib.Telnet()
+telnet.sock = chan #The syntax to play with this looks a lot like a regular socket.... ;)
+try:
+    telnet.mt_interact()
+except:
+    print("Proxy socket closed")
+chan.close()
+telnet.close()
+proxy.close()
