@@ -6,6 +6,10 @@ try:
     import getpass
 except:
     exit(0)
+
+if sys.version_info[0] != 3:
+    exit("Requires python3")
+
 print(" _____ _____ _____ ")
 print("|  _  |   __|  |  |")
 print("|     |__   |     |")
