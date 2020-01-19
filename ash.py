@@ -1,43 +1,15 @@
-try:
-    import socks #pip3 install PySocks
-    import telnetlib
-    import os
-    import time as t
-    import paramiko
-    import subprocess
-    import sys
-    import getpass
-except:
-    exit("Dependancy error")
+import socks #pip3 install PySocks
+import telnetlib
+import os
+import time as t
+import paramiko
+import subprocess
+import sys
+import getpass
+import argparse
 
 if sys.version_info[0] != 3:
     exit("Requires python3")
-
-print(" _____ _____ _____ ")
-print("|  _  |   __|  |  |")
-print("|     |__   |     |")
-print("|__|__|_____|__|__|")
-print("       [ASH]       ")
-print("  An SSH over tor  ")
-print("-------------------")
-print("\nWARNING: This program requires tor to be running in the background on port 9050.")
-
-try:
-    host = sys.argv[1]
-except:
-    exit("Error - expected argument")
-
-try:
-    port = sys.argv[2]
-except:
-    port = 22
-
-try:
-    user,host = host.split("@",1)
-except:
-    user = input("username: ")
-
-password = getpass.getpass("password: ")
 
 def debug(string,debug=True,verbose=True):
     string = "[DEBUG] {}".format(string)
@@ -46,6 +18,32 @@ def debug(string,debug=True,verbose=True):
             print(string)
         else:
             return(string)
+
+parser = argparse.ArgumentParser(description='Anonymous SSH client over tor')
+parser.add_argument('host',type=str,help='hostname to connect to',nargs=1)
+parser.add_argument('-p',dest='port',type=int,help='port to connect to',nargs=1,required=False,default=22)
+parser.add_argument('--tor-port',dest='torport',type=int,help='tor proxy port',nargs=1,required=False,default=[9050])
+parser.add_argument('-u',dest='user',type=str,help='username',nargs=1,required=False)
+
+arguments = parser.parse_args()
+arguments = vars(arguments)
+if arguments['user']:
+    user = arguments['user'][0]
+else:
+    user = None
+host = arguments['host'][0]
+port = int(arguments['port'])
+torport = arguments['torport'][0]
+
+try:
+    user,host = host.split("@",1)
+except:
+    if not user:
+        user = input("username: ")
+
+debug("USER: {} | HOST: {} | PORT: {} | TOR PORT: {}".format(user,host,port,torport))
+
+password = getpass.getpass("{}@{}'s password: ".format(user,host))
 
 try:
     p = subprocess.Popen("tor-resolve {}".format(str(host)), stdout=subprocess.PIPE, shell=True)
@@ -77,24 +75,18 @@ while True:
         proxy.set_proxy(
                 proxy_type=socks.SOCKS4,
                 addr='localhost',
-                port=9050
+                port=torport
         )
         debug("Connecting...")
-        proxy.connect((str(ip),int(port)))    
-        #debug("Connected to proxy")
-        #transport = paramiko.Transport(proxy)
-        #transport.connect() 
-        #debug("Transport online")
-        #ssh = paramiko.client.SSHClient.connect(ip,int(port),username=str(user),password=str(password),timeout=None,look_for_keys=False,allow_agent=False,pkey=None,key_filename=None,sock=proxy)
+        try:
+            proxy.connect((str(ip),int(port)))    
+        except:
+            exit("Error: proxy connection failed.")
         
-        #####-----#####
-
         ssh=paramiko.SSHClient()
-        #ssh.load_system_host_keys()
         ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-        ssh.connect(ip,int(port),username=str(user),password=str(password),timeout=None,look_for_keys=False,allow_agent=False,pkey=None,key_filename=None,sock=proxy)
-        print(ssh._transport.get_banner())
+        ssh.connect(ip,int(port),banner_timeout=3,username=str(user),password=str(password),timeout=None,look_for_keys=False,allow_agent=False,pkey=None,key_filename=None,sock=proxy)
         break
     except KeyboardInterrupt:
         print("User requested interrupt.")
@@ -106,15 +98,13 @@ while True:
         print("Generic error.")
         debug(e)
         sys.exit(-1)
-prompt="ash>"
-#ssh.get_pty()
+
+debug("Spawning interactive channel")
 
 term = subprocess.check_output('echo $TERM',shell=True).split()
 rows, columns = os.popen('stty size', 'r').read().split()
 term = term[0]
-debug(term)
 chan = ssh.invoke_shell(term=term,width=int(rows),height=int(columns))
-
 
 telnet = telnetlib.Telnet()
 telnet.sock = chan #The syntax to play with this looks a lot like a regular socket.... ;)
