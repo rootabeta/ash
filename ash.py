@@ -11,7 +11,7 @@ import argparse
 if sys.version_info[0] != 3:
     exit("Requires python3")
 
-def debug(string,debug=True,verbose=True):
+def debug(string,debug=False,verbose=True):
     string = "[DEBUG] {}".format(string)
     if debug:
         if verbose:
