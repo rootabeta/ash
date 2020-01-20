@@ -68,37 +68,37 @@ port = 22
 ##ssh.load_system_host_keys()
 #ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-while True:
+try:
+    debug("Attempting to connect.")
+    #proxy = paramiko.ProxyCommand('tor --SocksPort 4172')
+    proxy = socks.socksocket()
+    proxy.set_proxy(
+            proxy_type=socks.SOCKS4,
+            addr='localhost',
+            port=torport
+    )
+    debug("Connecting...")
     try:
-        debug("Attempting to connect.")
-        #proxy = paramiko.ProxyCommand('tor --SocksPort 4172')
-        proxy = socks.socksocket()
-        proxy.set_proxy(
-                proxy_type=socks.SOCKS4,
-                addr='localhost',
-                port=torport
-        )
-        debug("Connecting...")
-        try:
-            proxy.connect((str(ip),int(port)))    
-        except:
-            exit("Error: proxy connection failed.")
-        
-        ssh=paramiko.SSHClient()
-        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        proxy.connect((str(ip),int(port)))    
+    except:
+        exit("Error: proxy connection failed.")
+    
+    ssh=paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    ssh.connect(ip,int(port),banner_timeout=3,username=str(user),password=str(password),timeout=None,look_for_keys=False,allow_agent=False,pkey=None,key_filename=None,sock=proxy)
+    transport = ssh.get_transport()
+    #print(transport.get_banner())
 
-        ssh.connect(ip,int(port),banner_timeout=3,username=str(user),password=str(password),timeout=None,look_for_keys=False,allow_agent=False,pkey=None,key_filename=None,sock=proxy)
-        break
-    except KeyboardInterrupt:
-        print("User requested interrupt.")
-        sys.exit(0)
-    except paramiko.ssh_exception.AuthenticationException:
-        print("Authentication Error.")
-        sys.exit(0)
-    except Exception as e:
-        print("Generic error.")
-        debug(e)
-        sys.exit(-1)
+except KeyboardInterrupt:
+    print("User requested interrupt.")
+    sys.exit(-1)
+except paramiko.ssh_exception.AuthenticationException:
+    print("Authentication Error.")
+    sys.exit(-1)
+except Exception as e:
+    print("Generic error.")
+    debug(e)
+    sys.exit(-1)
 
 debug("Spawning interactive channel")
 
@@ -110,6 +110,7 @@ chan = ssh.invoke_shell(term=term,width=int(rows),height=int(columns))
 telnet = telnetlib.Telnet()
 telnet.sock = chan #The syntax to play with this looks a lot like a regular socket.... ;)
 try:
+    #telnet.interact()
     telnet.mt_interact()
 except:
     print("Proxy socket closed")
