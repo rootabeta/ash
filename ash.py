@@ -39,7 +39,8 @@ try:
     user,host = host.split("@",1)
 except:
     if not user:
-        user = input("username: ")
+        user = getpass.getuser()
+        #user = input("username: ")
 
 debug("USER: {} | HOST: {} | PORT: {} | TOR PORT: {}".format(user,host,port,torport))
 
